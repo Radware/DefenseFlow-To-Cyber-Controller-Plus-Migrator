@@ -26,7 +26,7 @@ class Vision():
 
         if response['status'] == 'ok':
             sess.headers.update({"JSESSIONID": response['jsessionid']})
-            print("Loging Successful")
+            print("Login Successful")
         else:
             print(f"Login Error: {r.text}")
             return None
@@ -263,8 +263,6 @@ class Vision():
                 print("Added device:", device_name)
                 logging.info("Added device: " + device_name)
 
-
-# Function to check if a file exists
 def check_file_exists(file_path):
     if not os.path.exists(file_path):
         print(f"Error: The file '{file_path}' does not exist.")
@@ -464,6 +462,3 @@ def offline_configuration_edit():
 
 if __name__ == "__main__":
     main_menu()
-    # v = Vision()
-    # v.dst_vision_login()
-    # v.upload_df_edited_config('DefenseFlowConfiguration_2024-09-30_09-43-10-edited.zip')
