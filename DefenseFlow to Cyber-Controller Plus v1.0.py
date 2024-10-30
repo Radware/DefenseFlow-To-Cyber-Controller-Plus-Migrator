@@ -1,6 +1,4 @@
-# from vision import Vision
-import os, sys
-# from dfConfigModifier import DFConfigModifier
+import os, sys, re
 import zipfile
 import json
 import shutil
@@ -9,12 +7,20 @@ import urllib3
 import json
 from getpass import getpass
 import logging
+import argparse
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+pattern = r'^(?P<user>[^:]+):(?P<pass>[^@]+)@(?P<ip>[\d.]+)$'
+
 class Vision():
-    def __init__(self):
-        pass
+    def __init__(self, src_ip, src_user, src_pass, dst_ip, dst_user, dst_pass):
+        self.src_ip = src_ip
+        self.src_user = src_user
+        self.src_pass = src_pass
+        self.dst_ip = dst_ip
+        self.dst_user = dst_user
+        self.dst_pass = dst_pass
 
     def login(self, ip, username, password):
         login_url = 'https://' + ip + '/mgmt/system/user/login'
@@ -34,22 +40,16 @@ class Vision():
         return sess
 
     def src_vision_login(self):
-        print("--- Source Cyber-Controller Details ---")
-        self.src_cc_ip = input("Address: ")
-        self.src_cc_user = input("Username: ")
-        self.src_cc_password = getpass("Password: ")
-        self.src_session = self.login(self.src_cc_ip, self.src_cc_user, self.src_cc_password)
+        print("--- Login to Source Vision Server ---")
+        self.src_session = self.login(self.src_ip, self.src_user, self.src_pass)
 
     def dst_vision_login(self):
-        print("\n--- Destination Cyber-Controller Details ---")
-        self.dst_cc_ip = input("Address: ")
-        self.dst_cc_user = input("Username: ")
-        self.dst_cc_password = getpass("Password: ")
-        self.dst_session = self.login(self.dst_cc_ip, self.dst_cc_user, self.dst_cc_password)
+        print("\n--- Login to Destination Cyber-Controller Server ---")
+        self.dst_session = self.login(self.dst_ip, self.dst_user, self.dst_pass)
 
     def download_df_config(self):
-        print('Exporting DefenseFlow Configuration')
-        url = 'https://' + self.src_cc_ip + '/mgmt/device/df/config/getfromdevice?saveToDb=false&type=config'
+        print('Exporting DefenseFlow Configuration from Vision')
+        url = 'https://' + self.src_ip + '/mgmt/device/df/config/getfromdevice?saveToDb=false&type=config'
         response = self.src_session.get(url, stream=True)
         # Open the file in binary write mode and download it in chunks
         if 'Content-Disposition' in response.headers:
@@ -64,224 +64,44 @@ class Vision():
 
         print(f'Successfully Exported File {filename}')
         return filename
-    
+
     def upload_df_edited_config(self, filename):
-        print('Imoporting DefenseFlow Configuration')
-        url = 'https://' + self.dst_cc_ip + f'/mgmt/device/df/config/sendtodevice?fileName={filename}&type=config'
+        print('Imoporting DefenseFlow Configuration to Cyber-Controller Plus')
+        url = 'https://' + self.dst_ip + f'/mgmt/device/df/config/sendtodevice?fileName={filename}&type=config'
         files = {'Filedata': ('DefenseFlow-To-CCPlus.code-workspace', open(filename, 'rb'), 'application/octet-stream')}
-        response = self.dst_session.post(url, files=files)
-        print(response.status_code)
-        print(response.text)
+        r = self.dst_session.post(url, files=files)
+        if r.status_code != 200:
+            print(f"Error: status code {r.status_code} with message {r.text}")
+            exit(1)
+        
+        r_dict = r.json()
+        if 'status' in r_dict and r_dict['status'] != 'success':
+            print(f"Error: received response with status '{r_dict['status']}' and message '{r_dict['message']}'")
+            exit(1)
 
-    def get_parent_site_id(parent_site_name, session, dst_cc_ip):
-        parent_site_name_url = 'https://' + dst_cc_ip + '/mgmt/system/config/tree/site/byname/' + parent_site_name
-        parent_site_name_response = session.get(parent_site_name_url, verify=False)
-        data = json.loads(parent_site_name_response.text)
-        if "There is no site with name" in parent_site_name_response.text:
-            return False
-        else:
-            parent_site_id = data['ormID']
-            return parent_site_id
+        print("Successfully Migrated DefenseFlow Configuration to Cyber-Controller Plus")
 
-    def get_parent_site_name(device_parent_id, session, ip):
-        parent_site_id_url = 'https://' + ip + '/mgmt/system/config/tree/site/byid/' + device_parent_id
-        parent_site_id_response = session.get(parent_site_id_url, verify=False)
-        data = json.loads(parent_site_id_response.text)
-        if "There is no site with name" in parent_site_id_response.text:
-            return False
-        else:
-            parent_site_name = data['name']
-            return parent_site_name
-
-    def extract_sites_and_devices(self, data, src_session, src_cc_ip, parent_id=None):
-        sites = []
-        devices = []
-
-        for item in data["children"]:
-            if item["meIdentifier"]["managedElementClass"] == "com.radware.insite.model.device.Device":
-                device_parent_id = parent_id if parent_id else data["meIdentifier"]["managedElementID"]
-
-                # parent_site_name = get_parent_site_name(device_parent_id)
-
-                device = {
-                    "name": item["name"],
-                    "type": item["type"],
-                    "managementIp": item["managementIp"],
-                    "id": item["meIdentifier"]["managedElementID"],
-                    "parentOrmID": device_parent_id
-                    # "parent_site_name": parent_site_name
-                }
-                devices.append(device)
-            elif item["meIdentifier"]["managedElementClass"] == "com.radware.insite.model.device.Site":
-                site_parent_id = parent_id if parent_id else data["meIdentifier"]["managedElementID"]
-                parent_site_name = self.get_parent_site_name(site_parent_id, src_session, src_cc_ip)
-
-                site = {
-                    "name": item["name"],
-                    "id": item["meIdentifier"]["managedElementID"],
-                    "parent_site_name": parent_site_name,
-                    "parentOrmID": site_parent_id
-                }
-
-                sites.append(site)
-                extracted_sites, extracted_devices = self.extract_sites_and_devices(item, src_session, src_cc_ip,
-                                                                            item["meIdentifier"]["managedElementID"])
-                sites.extend(extracted_sites)
-                devices.extend(extracted_devices)
-
-        return sites, devices
-
-    def extract_device_access_data(self, device_ip, existing_file_data, session, src_cc_ip):
-        url = 'https://' + src_cc_ip + '/mgmt/system/config/tree/device/byip/' + device_ip
-        response = session.get(url, verify=False)
-        data = json.loads(response.text)
-        device_access_data = data["deviceSetup"]['deviceAccess']
-        del device_access_data['ormID']
-
-        for device in existing_file_data['devices']:
-            if device['managementIp'] == device_ip:
-                device['deviceAccess'] = device_access_data
-                break
-
-        return existing_file_data
-
-
-    def get_site_name_by_id(self, site_id, json_data):
-        # Extracting the name of the site by ID
-        site_name = None
-
-        for site in json_data['sites']:
-            if site['id'] == site_id:
-                site_name = site['name']
-                break
-
-        return site_name
-
-    def copy_devices_from_vision_to_cc(self):
-        self.main('/mgmt/system/config/tree/Physical')
-        self.main('/mgmt/system/config/tree/Organization')
-
-
-    def main(self, url_suffix):
-
-        src_session = self.src_session
-
-        url = 'https://' + self.src_cc_ip + url_suffix
-        response = src_session.get(url, verify=False)
-        data = json.loads(response.text)
-
-        # Extract sites and devices
-        extracted_sites, extracted_devices = self.extract_sites_and_devices(data, src_session, self.src_cc_ip)
-
-        # Construct the final JSON structure
-        final_json = {
-            "sites": extracted_sites,
-            "devices": extracted_devices
-        }
-
-        for device in final_json['devices']:
-            device_ip = device['managementIp']
-            final_json = self.extract_device_access_data(device_ip, final_json, src_session, self.src_cc_ip)
-
-        src_cc_root_site_name = data["name"]
-
-        dst_session = self.dst_session
-        url = 'https://' + self.dst_cc_ip + url_suffix
-        response = dst_session.get(url, verify=False)
-        data = json.loads(response.text)
-
-        dst_cc_root_site_name = data["name"]
-        dst_cc_root_site_id = data["meIdentifier"]["managedElementID"]
-
-        if dst_cc_root_site_name != src_cc_root_site_name:
-            url = 'https://' + self.dst_cc_ip + '/mgmt/system/config/tree/site'
-            payload = {
-                "ormID": dst_cc_root_site_id,
-                "name": src_cc_root_site_name
-            }
-            response = dst_session.put(url, json=payload, verify=False)
-            if response.status_code != 200:
-                print("Failed to change root site name")
-                logging.error('Failed to change root site name')
-            else:
-                print("Root site name has been successfully changed to", src_cc_root_site_name)
-                logging.info("Root site name has been successfully changed to " + src_cc_root_site_name)
-
-        for site in final_json["sites"]:
-            site_name = site["name"]
-            parent_site_name = site["parent_site_name"]
-
-            parent_site_id = self.get_parent_site_id(parent_site_name, dst_session, self.dst_cc_ip)
-            if not parent_site_id:
-                parent_site_id = dst_cc_root_site_id
-
-            # Make POST request
-            payload = {
-                "parentOrmID": parent_site_id,
-                "name": site_name
-            }
-            url = 'https://' + self.dst_cc_ip + '/mgmt/system/config/tree/site'
-
-            response = dst_session.post(url, verify=False, json=payload)
-            if response.status_code != 200:
-                print("Failed to add site: ", site_name)
-                error = response.json()
-                error_message = error['message']
-                logging.error("Failed to add site - " + site_name + ' ' + error_message)
-            else:
-                print("Added site:", site_name)
-                logging.info("Added site: " + site_name)
-
-        for device in final_json["devices"]:
-            device_name = device['name']
-
-            src_parent_device_id = device['parentOrmID']
-            parent_site_name = self.get_site_name_by_id(src_parent_device_id, final_json)
-
-            if not parent_site_name:
-                parent_orm_id = dst_cc_root_site_id
-            else:
-                parent_orm_id = self.get_parent_site_id(parent_site_name, dst_session, self.dst_cc_ip)
-
-            payload = {
-                "name": device['name'],
-                "parentOrmID": parent_orm_id,
-                "type": device['type'],
-                "deviceSetup": {
-                    "deviceAccess": device['deviceAccess']
-                }
-            }
-
-            url = 'https://' + self.dst_cc_ip + '/mgmt/system/config/tree/device'
-            response = dst_session.post(url, verify=False, json=payload)
-            if response.status_code != 200:
-                print("Failed to add device:", device_name)
-                error = response.json()
-                error_message = error['message']
-                logging.error("Failed to add device - " + device_name + ' ' + error_message)
-            else:
-                print("Added device:", device_name)
-                logging.info("Added device: " + device_name)
-
+# Function to check if a file exists
 def check_file_exists(file_path):
     if not os.path.exists(file_path):
         print(f"Error: The file '{file_path}' does not exist.")
         sys.exit(1)
 
 class DFConfigModifier():
-    def __init__(self, df_config_file):
-        df_config_file
-        
+
+    def __init__(self, df_config_filename, disable_pos, po_precedence):
+        self.source_config = df_config_filename
+        self.disable_pos = disable_pos
+        self.po_precedence = po_precedence
         # Check if the file exists
-        check_file_exists(df_config_file)
+        check_file_exists(self.source_config)
 
         # Modify the filename to create a new destination file
-        if not df_config_file.endswith(".zip"):
+        if not self.source_config.endswith(".zip"):
             print("Error: The source file must have a .zip extension.")
             sys.exit(1)
-        self.source_config = df_config_file
-        self.dest_config= self.source_config.replace(".zip", "-edited.zip")
 
+        self.dest_config= self.source_config.replace(".zip", "-edited.zip")
 
     # Function to modify status.json
     def modify_status_json(self, data):
@@ -304,15 +124,8 @@ class DFConfigModifier():
 
     # Function to modify protected_object_configuration.json
     def modify_protected_object_config(self, data):
-        # Ask user for confirmation to disable all items
-        while True:
-            confirm = input("Do you want to disable all items in protected_object_configuration.json? (yes/no): ").lower()
-            if confirm in ['yes', 'no']:
-                break
-            else:
-                print("Please enter 'yes' or 'no'.")
-        
-        if confirm == "yes":
+        if self.disable_pos:
+            print("Disabling All Protected Objects")
             for item in data.get("protectedObjects", []):
                 item["adminStatus"] = "DISABLED"
         return data
@@ -321,6 +134,29 @@ class DFConfigModifier():
     def modify_policy_editor_backup(self, data):
         if "protectionPulses" in data:
             data["protectionPulses"] = []  # Empty the list of policies
+
+        return data
+    
+    def modify_system_configuration(self, data):
+        default_precedence = {
+            'dfc.defensepro.policy.precedence.granular.p0.high':'16000', 
+            'dfc.defensepro.policy.precedence.granular.p1.high':'63999', 
+            'dfc.defensepro.policy.precedence.granular.p2.high':'48000', 
+            'dfc.defensepro.policy.precedence.granular.p3.high':'32000', 
+            'dfc.defensepro.policy.precedence.standard.p0.high':'8000', 
+            'dfc.defensepro.policy.precedence.standard.p1.high':'56000', 
+            'dfc.defensepro.policy.precedence.standard.p2.high':'40000', 
+            'dfc.defensepro.policy.precedence.standard.p3.high':'24000'
+        }
+
+        for precedene_name, value in default_precedence.items():
+            if precedene_name in data['modifiedKeys']:
+                value = int(data['modifiedKeys'][precedene_name])
+            else:
+                value = int(default_precedence[precedene_name])
+            
+            value+=500
+            data['modifiedKeys'][precedene_name] = str(value)
 
         return data
 
@@ -338,10 +174,14 @@ class DFConfigModifier():
         files_to_modify = {
             "status.json": self.modify_status_json,
             "policy-editor-backup.json": self.modify_policy_editor_backup,
-            "protected_object_configuration.json": self.modify_protected_object_config
+            "protected_object_configuration.json": self.modify_protected_object_config,
+            "system_configuration.json": self.modify_system_configuration
         }
 
         for file_name, modify_function in files_to_modify.items():
+            if not self.po_precedence and file_name == "system_configuration.json":
+                continue
+                
             file_path = os.path.join(temp_dir, file_name)
             if os.path.exists(file_path):
                 print(f"Modifying {file_name}...")
@@ -362,7 +202,7 @@ class DFConfigModifier():
 
         # Clean up temporary files
         shutil.rmtree(temp_dir)
-        print(f"New zip file created: {self.dest_config}")
+        print(f"DefenseFlow configuration file successfully migrated and saved to disk: '{self.dest_config}'")
         return self.dest_config
 
 def clear_screen():
@@ -372,7 +212,7 @@ def clear_screen():
         os.system('clear')
 
 def print_ascii_art():
-    art = """
+    art = r"""
  _____        __                    ______ _                 __  __ _                 _   _                _____           _       _   
 |  __ \      / _|                  |  ____| |               |  \/  (_)               | | (_)              / ____|         (_)     | |  
 | |  | | ___| |_ ___ _ __  ___  ___| |__  | | _____      __ | \  / |_  __ _ _ __ __ _| |_ _  ___  _ __   | (___   ___ _ __ _ _ __ | |_ 
@@ -382,7 +222,6 @@ def print_ascii_art():
                                                                        __/ |                                                | |        
                                                                       |___/                                                 |_|        
 Version: 1.0
-Written by: Daniel Offek
 """
     print(art)
 
@@ -391,7 +230,7 @@ def print_prerequisites():
 - Cyber-Contorller Plus license installed.
 - Physical interfaces in DefenseFlow must match those in the Cyber-Controller Plus. However, the IP addresses do not need to be identical.
 - Interface associations must be the same between DefenseFlow and the Cyber-Controller Plus.
-- If using Offline miration mode, ensure that DefensePro devices are preconfigured on the Cyber-Controller.
+- Ensure that DefensePro devices are preconfigured on the Cyber-Controller before import.
 
 Press any key to confirm you have read and understood the above."""
     print(prerequisites, end='')
@@ -399,66 +238,96 @@ Press any key to confirm you have read and understood the above."""
 def confirm_prerequisites():
     if os.name == 'nt':  # For Windows
         import msvcrt
+        print("Press any key to continue...")
         msvcrt.getch()
+        os.system('cls')
     else:  # For Unix-based systems (Linux, Mac)
         import tty
         import termios
+        print("Press any key to continue...")
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
-            tty.setraw(sys.stdin.fileno())
+            tty.setraw(fd)
             sys.stdin.read(1)
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        os.system('clear')
 
-def main_menu():
-    clear_screen()
-    print_ascii_art()
-    print_prerequisites()
-    confirm_prerequisites()
-    while True:
-        clear_screen()
-        print("1. Online Migration - Requires access to both Vision and Cyber Controller")
-        print("2. Offline Migration - Requires DefenseFlow configuration file")
-        print("3. Exit")
-        
-        choice = input("\nEnter your choice (1/2/3): ")
+def parse_args():
+    parser = argparse.ArgumentParser(description="",
+        epilog=f"""Example usage: 
+  python {os.path.basename(__file__)} --mode offline --input DefenseFlowConfiguration_2024-10-15_05-33-54.zip --disable-pos
+  python {os.path.basename(__file__)} --mode online --src user:pass@1.1.1.1 --dst user:pass@2.2.2.2 --disable-pos""",
+formatter_class=argparse.RawTextHelpFormatter)
 
-        if choice == '1':
-            complete_migration_online()
-            exit(0)
-        elif choice == '2':
-            offline_configuration_edit()
-            exit(0)
-        elif choice == '3':
-            print("Exiting the program.")
-            break
-        else:
-            print("Invalid choice, please select 1, 2, or 3.")
+    parser.add_argument('--mode', metavar='MODE', type=str, choices=['offline', 'online'], required=True, help="Specify the mode of operation: 'offline' or 'online'")
+    parser.add_argument('--src', metavar='u:p@ip', type=str, required=False, help="Source Vision Username ,Password, IP address")
+    parser.add_argument('--dst', metavar='u:p@ip',type=str, required=False, help="Destination Cyber-Controller Username ,Password, IP address")
+    parser.add_argument('--input', metavar='FILENAME', type=str, required=False, help="Specify the DefenseFlow exported filename (e.g., 'DefenseFlowConfiguration_2024-10-15_05-33-54.zip'). for 'offline' mode only")
+    parser.add_argument('--disable-pos', action='store_true' ,required=False, help="Disable all Protected Objects in the DefenseFlow configuration (applies to both online and offline modes)")
+    parser.add_argument('--inc-po-precedence', action='store_true', required=False, help="Adds 500 to the default precedence used by DefenseFlow for Policy")
+    parser.add_argument('--no-prereq', action='store_true' ,required=False, help="Skip displaying the prerequisites message")
 
-def complete_migration_online():
-    print("\nStarting complete migration of DefenseFlow to Cyber Controller Plus...")
-    v = Vision()
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+    if not args.no_prereq:
+        print_prerequisites()
+        confirm_prerequisites()
+    
+    if args.mode == 'online':
+        # Source parsing
+        if not args.src:
+            print(f"{os.path.basename(__file__)}: error: argument --src: missing")
+            exit(1)
+        src_match = re.match(pattern, args.src)
+        if not src_match:
+            print(f"{os.path.basename(__file__)}: error: argument --src: is not in the correct format, expected 'user:pass@ip'")
+            exit(1)
+
+        # Destination parsing
+        if not args.dst:
+            print(f"{os.path.basename(__file__)}: error: argument --dst: missing")
+            exit(1)
+        dst_match = re.match(pattern, args.dst)
+        if not dst_match:
+            print(f"{os.path.basename(__file__)}: error: argument --dst: is not in the correct format, expected 'user:pass@ip'")
+            exit(1)
+
+        src_ip = src_match.group('ip')
+        src_user = src_match.group('user')
+        src_pass = src_match.group('pass')
+        dst_ip = dst_match.group('ip')
+        dst_user = dst_match.group('user')
+        dst_pass = dst_match.group('pass')
+        disable_pos = args.disable_pos
+        po_precedence = args.inc_po_precedence
+        online_migration(src_ip, src_user, src_pass, dst_ip, dst_user, dst_pass, disable_pos, po_precedence)
+    if args.mode == 'offline':
+        if not args.input:
+            print(f"{os.path.basename(__file__)}: error: argument --input: missing")
+            exit(1)
+        df_config_filename = args.input
+        disable_pos = args.disable_pos
+        po_precedence = args.inc_po_precedence
+        offline_migration(df_config_filename, disable_pos, po_precedence)
+
+def online_migration(src_ip, src_user, src_pass, dst_ip, dst_user, dst_pass, disable_pos, po_precedence):
+    print("\nStarting online migration of DefenseFlow to Cyber Controller Plus...")
+    v = Vision(src_ip, src_user, src_pass, dst_ip, dst_user, dst_pass)
     v.src_vision_login()
-    df_config_file = v.download_df_config()
-    dfcm = DFConfigModifier(df_config_file)
+    df_config_filename = v.download_df_config()
+    dfcm = DFConfigModifier(df_config_filename, disable_pos, po_precedence)
     df_edited_config_file = dfcm.process()
     v.dst_vision_login()
-    while True:
-        answer = input('Do you want to copy all devices and site hirarchy (yes/no): ').lower()
-        if answer in ['yes', 'no']:
-            break
-        else:
-            print("Invalid input. Please enter 'yes' or 'no'.")
-    if answer == 'yes':
-        v.copy_devices_from_vision_to_cc()
     v.upload_df_edited_config(df_edited_config_file)
 
-def offline_configuration_edit():
-    print("\nStarting offline configuration file edit...")
-    df_config_file = input("Enter DefenseFlow Configuration Filename: ")
-    dfcm = DFConfigModifier(df_config_file)
+def offline_migration(df_config_filename, disable_pos, po_precedence):
+    print("\nStarting offline configuration file migration...")
+    dfcm = DFConfigModifier(df_config_filename, disable_pos, po_precedence)
     dfcm.process()
 
 if __name__ == "__main__":
-    main_menu()
+    main()
