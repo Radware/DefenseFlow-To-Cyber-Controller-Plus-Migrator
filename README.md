@@ -37,3 +37,39 @@ Ensure the following are available before running the script:
 2. Install the required Python dependencies:
    ```bash
    pip install requests
+
+## Usage
+
+### Basic Command
+
+```bash
+python3 <script_name> [OPTIONS]
+
+### Parameters
+
+- **--mode**  
+  Mode of operation (`offline` or `online`).  
+  Example: `--mode offline`
+
+- **--src**  
+  Source details (username, password, and IP) for Vision in online mode.  
+  Format: `user:pass@ip`  
+  Example: `--src admin:password@1.1.1.1`
+
+- **--dst**  
+  Destination details (username, password, and IP) for Cyber-Controller Plus.  
+  Format: `user:pass@ip`  
+  Example: `--dst admin:password@2.2.2.2`
+
+- **--input**  
+  DefenseFlow configuration file for offline mode.  
+  Example: `--input DefenseFlowConfiguration_2024-10-15_05-33-54.zip`
+
+- **--disable-pos**  
+  Disable all Protected Objects during the migration. Useful for gradual migration.
+
+- **--inc-po-precedence**  
+  Increment default policy precedence to avoid collisions when running both systems concurrently.
+
+- **--no-prereq**  
+  Skip the prerequisites message.
