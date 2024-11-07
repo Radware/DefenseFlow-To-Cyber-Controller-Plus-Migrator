@@ -34,3 +34,6 @@ Ensure the following are available before running the script:
    ```bash
    git clone https://github.com/Radware/DefenseFlow-To-Cyber-Controller-Plus-Migrator.git
    cd DefenseFlow-To-Cyber-Controller-Plus-Migrator
+2. Install the required Python dependencies:
+   ```bash
+   pip install requests
