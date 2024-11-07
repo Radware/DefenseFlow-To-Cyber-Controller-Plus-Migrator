@@ -79,10 +79,3 @@ python3 script_name.py --mode offline --input DefenseFlowConfiguration_2024-10-1
 
 # Online mode example
 python3 script_name.py --mode online --src admin:password@1.1.1.1 --dst admin:password@2.2.2.2 --disable-pos
-
-
-- **--inc-po-precedence**  
-  Increment default policy precedence to avoid collisions when running both systems concurrently.
-
-- **--no-prereq**  
-  Skip the prerequisites message.
