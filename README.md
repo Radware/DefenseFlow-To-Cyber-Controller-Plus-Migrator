@@ -71,7 +71,7 @@ python3 DefenseFlow_to_Cyber-Controller_Plus.py [OPTIONS]
 - **--disable-pos**  
   Disable all Protected Objects during the migration. Useful for gradual migration.
 
-  ### Example Usage
+### Example Usage
 
 ```bash
 # Offline mode example
@@ -79,3 +79,8 @@ python3 script_name.py --mode offline --input DefenseFlowConfiguration_2024-10-1
 
 # Online mode example
 python3 script_name.py --mode online --src admin:password@1.1.1.1 --dst admin:password@2.2.2.2 --disable-pos
+```
+
+### Known Issues and Considerations
+
+- **Large Configuration Imports**: When importing large configurations, there may be instances where the Cyber-Controller Plus times out and returns an error message. However, the import may have completed successfully. You can verify this by checking the Cyber-Controller Plus logs to confirm the status of the import.
