@@ -32,5 +32,5 @@ Ensure the following are available before running the script:
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/defenseflow-migration.git
-   cd defenseflow-migration
+   git clone https://github.com/Radware/DefenseFlow-To-Cyber-Controller-Plus-Migrator.git
+   cd DefenseFlow-To-Cyber-Controller-Plus-Migrator
