@@ -45,7 +45,7 @@ Ensure the following are available before running the script:
 ### Basic Command
 
 ```bash
-python3 <script_name> [OPTIONS]
+python3 DefenseFlow_to_Cyber-Controller_Plus.py [OPTIONS]
 ```
 
 ### Parameters
