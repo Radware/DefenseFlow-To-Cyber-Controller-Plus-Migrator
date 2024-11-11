@@ -5,8 +5,6 @@ import shutil
 from requests import Session
 import urllib3
 import json
-from getpass import getpass
-import logging
 import argparse
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -57,13 +55,15 @@ class Vision():
             content_disposition = response.headers['Content-Disposition']
             filename = content_disposition.split('filename=')[-1].strip('"')
             
-        with open(filename, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:  # Filter out keep-alive new chunks
-                    file.write(chunk)
+            with open(filename, 'wb') as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:  # Filter out keep-alive new chunks
+                        file.write(chunk)
 
-        print(f'Successfully Exported File {filename}')
-        return filename
+            print(f'Successfully Exported File {filename}')
+            return filename
+        
+        print(f'Error while exporting DefenseFlow configuration')
 
     def upload_df_edited_config(self, filename):
         print('Imoporting DefenseFlow Configuration to Cyber-Controller Plus')
