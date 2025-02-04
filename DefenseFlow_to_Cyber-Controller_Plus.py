@@ -32,8 +32,8 @@ class Vision():
             sess.headers.update({"JSESSIONID": response['jsessionid']})
             print("Login Successful")
         else:
-            print(f"Login Error: {r.text}")
-            return None
+            print(f"Login Error: {ip} - {r.text}")
+            exit(1)
 
         return sess
 
@@ -71,12 +71,12 @@ class Vision():
         files = {'Filedata': ('DefenseFlow-To-CCPlus.code-workspace', open(filename, 'rb'), 'application/octet-stream')}
         r = self.dst_session.post(url, files=files)
         if r.status_code != 200:
-            print(f"Error: status code {r.status_code} with message {r.text}")
+            print(f"Error - Cyber-Controller: status code {r.status_code} with message {r.text}")
             exit(1)
         
         r_dict = r.json()
-        if 'status' in r_dict and r_dict['status'] != 'success':
-            print(f"Error: received response with status '{r_dict['status']}' and message '{r_dict['message']}'")
+        if 'status' in r_dict and r_dict['status'] != 'ok':
+            print(f"Error - Cyber-Controller: '{r_dict['message']}'")
             exit(1)
 
         print("Successfully Migrated DefenseFlow Configuration to Cyber-Controller Plus")
