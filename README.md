@@ -81,6 +81,23 @@ python3 script_name.py --mode offline --input DefenseFlowConfiguration_2024-10-1
 python3 script_name.py --mode online --src admin:password@1.1.1.1 --dst admin:password@2.2.2.2 --disable-pos
 ```
 
-### Known Issues and Considerations
+### Considerations and Known Caveats
 
-- **Large Configuration Imports**: When importing large configurations, there may be instances where the Cyber-Controller Plus times out and returns an error message. However, the import may have completed successfully. You can verify this by checking the Cyber-Controller Plus logs to confirm the status of the import.
+#### 1. Large Configurations May Cause Timeout Errors
+When importing large configurations, **Cyber-Controller Plus (CC Plus)** may return a timeout error. This typically happens because the system takes longer than expected to process the configuration.
+
+**Solution:**  
+Even if the script displays a timeout error, the configuration may have been successfully imported. To verify, check the **import/export log** on CC Plus.
+
+#### 2. DNS Allow List with Non-RFC Domain Names Will Fail During Import
+If a **non-RFC-compliant domain name** exists in the DNS allow list, the import will fail. This is due to differences in Allow List handling between **DefenseFlow** and **Cyber-Controller Plus**.
+
+**Solution:**  
+Before running the script, remove any **non-RFC-compliant domain names** from DefenseFlow. To identify the exact domain name that caused the import failure, check the **import/export log**.
+
+### How to Check Import/Export Logs
+To review the import/export logs on **Cyber-Controller Plus**, connect via SSH using the `root` user and execute the following commands:
+
+```bash
+root@cyber-controller-server:~# cddfclogs
+root@cyber-controller-server:~# cat import_export_configuration.log
