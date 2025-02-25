@@ -139,14 +139,14 @@ class DFConfigModifier():
     
     def modify_system_configuration(self, data):
         default_precedence = {
-            'dfc.defensepro.policy.precedence.granular.p0.high':'16000', 
-            'dfc.defensepro.policy.precedence.granular.p1.high':'63999', 
-            'dfc.defensepro.policy.precedence.granular.p2.high':'48000', 
-            'dfc.defensepro.policy.precedence.granular.p3.high':'32000', 
-            'dfc.defensepro.policy.precedence.standard.p0.high':'8000', 
-            'dfc.defensepro.policy.precedence.standard.p1.high':'56000', 
-            'dfc.defensepro.policy.precedence.standard.p2.high':'40000', 
-            'dfc.defensepro.policy.precedence.standard.p3.high':'24000'
+            'dfc.defensepro.policy.precedence.granular.p0.low':'8001',
+            'dfc.defensepro.policy.precedence.granular.p1.low':'56001',
+            'dfc.defensepro.policy.precedence.granular.p2.low':'40001',
+            'dfc.defensepro.policy.precedence.granular.p3.low':'24001',
+            'dfc.defensepro.policy.precedence.standard.p0.low':'1',
+            'dfc.defensepro.policy.precedence.standard.p1.low':'48001',
+            'dfc.defensepro.policy.precedence.standard.p2.low':'32001',
+            'dfc.defensepro.policy.precedence.standard.p3.low':'16001'
         }
 
         for precedene_name, value in default_precedence.items():
